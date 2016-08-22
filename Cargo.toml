@@ -1,0 +1,6 @@
+[package]
+name = "objpool"
+version = "0.1.0"
+authors = ["Avery Fay <avery@shadypixel.com>"]
+
+[dependencies]
