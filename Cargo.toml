@@ -2,5 +2,9 @@
 name = "objpool"
 version = "0.1.0"
 authors = ["Avery Fay <avery@shadypixel.com>"]
-
-[dependencies]
+description = "Thread-safe shared generic object pool"
+documentation = "https://btmorex.github.io/objpool/objpool/index.html"
+repository = "https://github.com/btmorex/objpool"
+readme = "README.md"
+keywords = ["cache", "concurrent", "generic", "object", "pool", "shared", "thread", "thread-safe"]
+license = "MIT"
