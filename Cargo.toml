@@ -6,5 +6,5 @@ description = "Thread-safe generic object pool"
 documentation = "https://btmorex.github.io/objpool/objpool/index.html"
 repository = "https://github.com/btmorex/objpool"
 readme = "README.md"
-keywords = ["cache", "concurrent", "generic", "object", "pool", "shared", "thread", "thread-safe"]
+keywords = ["generic", "object", "pool", "thread", "thread-safe"]
 license = "MIT"
