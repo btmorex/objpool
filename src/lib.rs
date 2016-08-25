@@ -4,10 +4,10 @@
 //! use objpool::PoolBuilder;
 //! use std::thread;
 //!
-//! let p = PoolBuilder::new(|| 0).max_items(5).finalize();
+//! let pool = PoolBuilder::new(|| 0).max_items(5).finalize();
 //! let mut handles = Vec::new();
 //! for _ in 0..10 {
-//!     let pool = p.clone();
+//!     let pool = pool.clone();
 //!     handles.push(thread::spawn(move || {
 //!         for _ in 0..1000 {
 //!             *pool.get() += 1;
@@ -18,7 +18,7 @@
 //! for handle in handles {
 //!     handle.join().unwrap();
 //! }
-//! assert_eq!(*p.get() + *p.get() + *p.get() + *p.get() + *p.get(), 10000);
+//! assert_eq!(*pool.get() + *pool.get() + *pool.get() + *pool.get() + *pool.get(), 10000);
 //! ```
 
 use std::error::Error;
@@ -232,10 +232,9 @@ mod tests {
     fn pool_get() {
         let pool = PoolBuilder::new(|| 0).max_items(1).finalize();
         let x = pool.get();
-        let p = pool.clone();
         let start = SystemTime::now();
         let handle = thread::spawn(move || {
-            let _ = p.get();
+            let _ = pool.get();
         });
         thread::sleep(Duration::from_millis(100));
         drop(x);
@@ -255,10 +254,9 @@ mod tests {
     fn pool_get_timeout_ok() {
         let pool = PoolBuilder::new(|| 0).max_items(1).finalize();
         let x = pool.get();
-        let p = pool.clone();
         let start = SystemTime::now();
         let handle = thread::spawn(move || {
-            let _ = p.get_timeout(Duration::from_secs(1)).unwrap();
+            let _ = pool.get_timeout(Duration::from_secs(1)).unwrap();
         });
         thread::sleep(Duration::from_millis(100));
         drop(x);
@@ -271,11 +269,13 @@ mod tests {
     fn pool_get_timeout_err() {
         let pool = PoolBuilder::new(|| 0).max_items(1).finalize();
         let _x = pool.get();
-        let p = pool.clone();
         let start = SystemTime::now();
-        let handle = thread::spawn(move || {
-            assert_eq!(p.get_timeout(Duration::from_millis(100)).err(), Some(TimeoutError));
-        });
+        let handle = {
+            let pool = pool.clone();
+            thread::spawn(move || {
+                assert_eq!(pool.get_timeout(Duration::from_millis(100)).err(), Some(TimeoutError));
+            })
+        };
         while start.elapsed().unwrap().as_millis() < 100 {
             pool.item_available.notify_one();
         }
