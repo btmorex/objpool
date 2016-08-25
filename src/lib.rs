@@ -1,3 +1,26 @@
+//! # Examples
+//!
+//! ```
+//! use objpool::PoolBuilder;
+//! use std::thread;
+//!
+//! let p = PoolBuilder::new(|| 0).max_items(5).finalize();
+//! let mut handles = Vec::new();
+//! for _ in 0..10 {
+//!     let pool = p.clone();
+//!     handles.push(thread::spawn(move || {
+//!         for _ in 0..1000 {
+//!             *pool.get() += 1;
+//!         }
+//!     }));
+//! }
+//!
+//! for handle in handles {
+//!     handle.join().unwrap();
+//! }
+//! assert_eq!(*p.get() + *p.get() + *p.get() + *p.get() + *p.get(), 10000);
+//! ```
+
 use std::error::Error;
 use std::fmt::{self, Debug, Display, Formatter};
 use std::ops::{Deref, DerefMut};
@@ -13,10 +36,10 @@ pub struct Pool<T, F> where F: Fn() -> T {
 
 impl<T, F> Pool<T, F> where F: Fn() -> T {
     pub fn new(create: F) -> Arc<Pool<T, F>> {
-        Pool::new_internal(create, None)
+        Pool::new_impl(create, None)
     }
 
-    fn new_internal(create: F, max_items: Option<usize>) -> Arc<Pool<T, F>> {
+    fn new_impl(create: F, max_items: Option<usize>) -> Arc<Pool<T, F>> {
         let pool = Arc::new(Pool {
             create: create,
             items: Mutex::new(Items {
@@ -35,14 +58,14 @@ impl<T, F> Pool<T, F> where F: Fn() -> T {
     }
 
     pub fn get(&self) -> Item<T, F> {
-        self.get_internal(None).unwrap()
+        self.get_impl(None).unwrap()
     }
 
     pub fn get_timeout(&self, duration: Duration) -> Result<Item<T, F>, TimeoutError> {
-        self.get_internal(Some(duration))
+        self.get_impl(Some(duration))
     }
 
-    fn get_internal(&self, duration: Option<Duration>) -> Result<Item<T, F>, TimeoutError> {
+    fn get_impl(&self, duration: Option<Duration>) -> Result<Item<T, F>, TimeoutError> {
         let mut items = self.items.lock().unwrap();
         let item = match items.available.pop() {
             Some(item) => item,
@@ -60,7 +83,7 @@ impl<T, F> Pool<T, F> where F: Fn() -> T {
                                     Ok(elapsed) => elapsed,
                                     Err(_) => Duration::from_secs(0),
                                 };
-                                if elapsed > duration {
+                                if elapsed >= duration {
                                     return Err(TimeoutError);
                                 }
                                 let (items, wait_result) =
@@ -89,7 +112,7 @@ impl<T, F> Pool<T, F> where F: Fn() -> T {
     }
 }
 
-impl<T, F> Debug for Pool<T, F> where T: Debug, F: Fn() -> T {
+impl<T, F> Debug for Pool<T, F> where F: Fn() -> T {
     fn fmt(&self, fmt: &mut Formatter) -> fmt::Result {
         fmt.debug_struct("Pool")
             .field("items", &*self.items.lock().unwrap())
@@ -113,7 +136,7 @@ impl<T, F> PoolBuilder<T, F> where F: Fn() -> T {
     }
 
     pub fn finalize(self) -> Arc<Pool<T, F>> {
-        Pool::new_internal(self.create, self.max_items)
+        Pool::new_impl(self.create, self.max_items)
     }
 }
 
@@ -123,7 +146,7 @@ struct Items<T> {
     max: Option<usize>,
 }
 
-impl<T> Debug for Items<T> where T: Debug {
+impl<T> Debug for Items<T> {
     fn fmt(&self, fmt: &mut Formatter) -> fmt::Result {
         fmt.debug_struct("Items")
             .field("available", &self.available.len())
