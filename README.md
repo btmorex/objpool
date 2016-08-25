@@ -8,7 +8,7 @@ Thread-safe generic object pool
 
 ## Examples
 
-```
+```rust
 use objpool::PoolBuilder;
 use std::thread;
 
