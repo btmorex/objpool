@@ -23,7 +23,7 @@ script:
   - travis-cargo build && travis-cargo test && travis-cargo --only stable doc
 after_success:
   - travis-cargo --only stable doc-upload
-  - travis-cargo coveralls --exclude-pattern=/usr/lib --no-sudo --verify
+  - travis-cargo coveralls --exclude-pattern=/usr/lib --no-sudo --verify --verbose
 
 env:
   global:
