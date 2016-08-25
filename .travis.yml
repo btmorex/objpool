@@ -17,12 +17,19 @@ matrix:
     - rust: nightly
 
 before_script:
-  - pip install --user "travis-cargo<0.2" && export PATH=$HOME/.local/bin:$PATH
+  - >
+    pip install --user https://github.com/btmorex/travis-cargo/archive/fix-coveralls.zip &&
+    export PATH=$HOME/.local/bin:$PATH
+
 script:
-  - travis-cargo build && travis-cargo test && travis-cargo --only stable doc
+  - >
+    travis-cargo build &&
+    travis-cargo test &&
+    travis-cargo --only stable doc
+
 after_success:
   - travis-cargo --only stable doc-upload
-  - travis-cargo coveralls --exclude-pattern=/usr/lib --no-sudo --verify -- --verbose
+  - travis-cargo coveralls --exclude-pattern=/usr/lib --no-sudo --verify
 
 env:
   global:
