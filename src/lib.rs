@@ -67,43 +67,41 @@ impl<T, F> Pool<T, F> where F: Fn() -> T {
 
     fn get_impl(&self, duration: Option<Duration>) -> Result<Item<T, F>, TimeoutError> {
         let mut items = self.items.lock().unwrap();
-        let item = match items.available.pop() {
-            Some(item) => item,
-            None => {
-                if items.count < items.max.unwrap_or(std::usize::MAX) {
-                    items.count += 1;
-                    drop(items);
-                    (self.create)()
-                } else {
-                    let start = SystemTime::now();
-                    while items.available.is_empty() {
-                        items = match duration {
-                            Some(duration) => {
-                                let elapsed = match start.elapsed() {
-                                    Ok(elapsed) => elapsed,
-                                    Err(_) => Duration::from_secs(0),
-                                };
-                                if elapsed >= duration {
-                                    return Err(TimeoutError);
-                                }
-                                let (items, wait_result) =
-                                    self.item_available.wait_timeout(items, duration - elapsed).unwrap();
-                                if wait_result.timed_out() {
-                                    return Err(TimeoutError);
-                                }
-                                items
-                            },
-                            None => self.item_available.wait(items).unwrap(),
-                        }
-                    }
-                    items.available.pop().unwrap()
+
+        if let Some(item) = items.available.pop() {
+            return Ok(self.wrap(item));
+        }
+
+        if items.count < items.max.unwrap_or(std::usize::MAX) {
+            items.count += 1;
+            drop(items);
+            return Ok(self.wrap((self.create)()));
+        }
+
+        if duration.is_some() {
+            let duration = duration.unwrap();
+            let start = SystemTime::now();
+            while items.available.is_empty() {
+                let elapsed = start.elapsed().unwrap_or(Duration::from_secs(0));
+                if elapsed >= duration {
+                    return Err(TimeoutError);
                 }
+                items = self.item_available.wait_timeout(items, duration - elapsed).unwrap().0;
             }
-        };
-        Ok(Item {
+        } else {
+            while items.available.is_empty() {
+                items = self.item_available.wait(items).unwrap();
+            }
+        }
+
+        Ok(self.wrap(items.available.pop().unwrap()))
+    }
+
+    fn wrap(&self, item: T) -> Item<T, F> {
+        Item {
             item: Some(item),
             pool: self.weak_self.upgrade().unwrap(),
-        })
+        }
     }
 
     fn put(&self, item: T) {
