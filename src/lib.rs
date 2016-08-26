@@ -36,16 +36,16 @@ pub struct Pool<T, F> where F: Fn() -> T {
 
 impl<T, F> Pool<T, F> where F: Fn() -> T {
     pub fn new(create: F) -> Arc<Pool<T, F>> {
-        Pool::new_impl(create, None)
+        Pool::with_capacity(std::usize::MAX, create)
     }
 
-    fn new_impl(create: F, max_items: Option<usize>) -> Arc<Pool<T, F>> {
+    pub fn with_capacity(capacity: usize, create: F) -> Arc<Pool<T, F>> {
         let pool = Arc::new(Pool {
             create: create,
             items: Mutex::new(Items {
                 available: Vec::new(),
                 count: 0,
-                max: max_items,
+                max: Some(capacity),
             }),
             item_available: Condvar::new(),
             weak_self: Weak::new(),
@@ -134,7 +134,7 @@ impl<T, F> PoolBuilder<T, F> where F: Fn() -> T {
     }
 
     pub fn finalize(self) -> Arc<Pool<T, F>> {
-        Pool::new_impl(self.create, self.max_items)
+        Pool::with_capacity(self.max_items.unwrap(), self.create)
     }
 }
 
