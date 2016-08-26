@@ -1,10 +1,10 @@
 //! # Examples
 //!
 //! ```
-//! use objpool::PoolBuilder;
+//! use objpool::Pool;
 //! use std::thread;
 //!
-//! let pool = PoolBuilder::new(|| 0).max_items(5).finalize();
+//! let pool = Pool::with_capacity(5, || 0);
 //! let mut handles = Vec::new();
 //! for _ in 0..10 {
 //!     let pool = pool.clone();
@@ -118,26 +118,6 @@ impl<T, F> Debug for Pool<T, F> where F: Fn() -> T {
     }
 }
 
-pub struct PoolBuilder<T, F> where F: Fn() -> T {
-    create: F,
-    max_items: Option<usize>,
-}
-
-impl<T, F> PoolBuilder<T, F> where F: Fn() -> T {
-    pub fn new(create: F) -> PoolBuilder<T, F> {
-        PoolBuilder { create: create, max_items: None }
-    }
-
-    pub fn max_items(mut self, max_items: usize) -> PoolBuilder<T, F> {
-        self.max_items = Some(max_items);
-        self
-    }
-
-    pub fn finalize(self) -> Arc<Pool<T, F>> {
-        Pool::with_capacity(self.max_items.unwrap(), self.create)
-    }
-}
-
 struct Items<T> {
     available: Vec<T>,
     count: usize,
@@ -221,14 +201,14 @@ mod tests {
 
     #[test]
     fn pool_builder() {
-        let pool = PoolBuilder::new(|| 0).max_items(1).finalize();
+        let pool = Pool::with_capacity(1, || 0);
         let _x = pool.get();
         assert_eq!(pool.get_timeout(Duration::from_secs(0)).err(), Some(TimeoutError));
     }
 
     #[test]
     fn pool_get() {
-        let pool = PoolBuilder::new(|| 0).max_items(1).finalize();
+        let pool = Pool::with_capacity(1, || 0);
         let x = pool.get();
         let start = SystemTime::now();
         let handle = thread::spawn(move || {
@@ -250,7 +230,7 @@ mod tests {
 
     #[test]
     fn pool_get_timeout_ok() {
-        let pool = PoolBuilder::new(|| 0).max_items(1).finalize();
+        let pool = Pool::with_capacity(1, || 0);
         let x = pool.get();
         let start = SystemTime::now();
         let handle = thread::spawn(move || {
@@ -265,7 +245,7 @@ mod tests {
 
     #[test]
     fn pool_get_timeout_err() {
-        let pool = PoolBuilder::new(|| 0).max_items(1).finalize();
+        let pool = Pool::with_capacity(1, || 0);
         let _x = pool.get();
         let start = SystemTime::now();
         let handle = {
@@ -284,7 +264,7 @@ mod tests {
 
     #[test]
     fn pool_debug() {
-        let pool = PoolBuilder::new(|| 0).max_items(5).finalize();
+        let pool = Pool::with_capacity(5, || 0);
         assert_eq!(format!("{:?}", pool),
             "Pool { items: Items { available: 0, count: 0, max: Some(5) } }");
         let x = pool.get();

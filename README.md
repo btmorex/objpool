@@ -10,10 +10,10 @@ Thread-safe generic object pool
 ## Examples
 
 ```rust
-use objpool::PoolBuilder;
+use objpool::Pool;
 use std::thread;
 
-let pool = PoolBuilder::new(|| 0).max_items(5).finalize();
+let pool = Pool::with_capacity(5, || 0);
 let mut handles = Vec::new();
 for _ in 0..10 {
     let pool = pool.clone();
