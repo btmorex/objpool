@@ -1,6 +1,6 @@
 [package]
 name = "objpool"
-version = "0.1.0"
+version = "0.2.0"
 authors = ["Avery Fay <avery@shadypixel.com>"]
 description = "Thread-safe generic object pool"
 documentation = "https://btmorex.github.io/objpool/objpool/index.html"
