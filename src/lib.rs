@@ -27,21 +27,25 @@ use std::ops::{Deref, DerefMut};
 use std::sync::{Arc, Condvar, Mutex, Weak};
 use std::time::{Duration, SystemTime};
 
-pub struct Pool<T, F> where F: Fn() -> T {
-    create: F,
+pub struct Pool<T> {
+    constructor: Box<Fn() -> T + Send + Sync + 'static>,
     items: Mutex<Items<T>>,
     item_available: Condvar,
-    weak_self: Weak<Pool<T, F>>,
+    weak_self: Weak<Pool<T>>,
 }
 
-impl<T, F> Pool<T, F> where F: Fn() -> T {
-    pub fn new(create: F) -> Arc<Pool<T, F>> {
-        Pool::with_capacity(std::usize::MAX, create)
+impl<T> Pool<T> {
+    pub fn new<C>(constructor: C) -> Arc<Pool<T>>
+        where C: Fn() -> T + Send + Sync + 'static {
+
+        Pool::with_capacity(std::usize::MAX, constructor)
     }
 
-    pub fn with_capacity(capacity: usize, create: F) -> Arc<Pool<T, F>> {
+    pub fn with_capacity<C>(capacity: usize, constructor: C) -> Arc<Pool<T>>
+        where C: Fn() -> T + Send + Sync + 'static {
+
         let pool = Arc::new(Pool {
-            create: create,
+            constructor: Box::new(constructor),
             items: Mutex::new(Items {
                 available: Vec::new(),
                 count: 0,
@@ -51,21 +55,21 @@ impl<T, F> Pool<T, F> where F: Fn() -> T {
             weak_self: Weak::new(),
         });
         unsafe {
-            let ptr = &pool.weak_self as *const Weak<Pool<T, F>> as *mut Weak<Pool<T, F>>;
+            let ptr = &pool.weak_self as *const Weak<Pool<T>> as *mut Weak<Pool<T>>;
             *ptr = Arc::downgrade(&pool);
         }
         pool
     }
 
-    pub fn get(&self) -> Item<T, F> {
+    pub fn get(&self) -> Item<T> {
         self.get_impl(None).unwrap()
     }
 
-    pub fn get_timeout(&self, duration: Duration) -> Result<Item<T, F>, TimeoutError> {
+    pub fn get_timeout(&self, duration: Duration) -> Result<Item<T>, TimeoutError> {
         self.get_impl(Some(duration))
     }
 
-    fn get_impl(&self, duration: Option<Duration>) -> Result<Item<T, F>, TimeoutError> {
+    fn get_impl(&self, duration: Option<Duration>) -> Result<Item<T>, TimeoutError> {
         let mut items = self.items.lock().unwrap();
 
         if let Some(item) = items.available.pop() {
@@ -75,7 +79,7 @@ impl<T, F> Pool<T, F> where F: Fn() -> T {
         if items.count < items.max.unwrap_or(std::usize::MAX) {
             items.count += 1;
             drop(items);
-            return Ok(self.wrap((self.create)()));
+            return Ok(self.wrap((self.constructor)()));
         }
 
         if duration.is_some() {
@@ -97,7 +101,7 @@ impl<T, F> Pool<T, F> where F: Fn() -> T {
         Ok(self.wrap(items.available.pop().unwrap()))
     }
 
-    fn wrap(&self, item: T) -> Item<T, F> {
+    fn wrap(&self, item: T) -> Item<T> {
         Item {
             item: Some(item),
             pool: self.weak_self.upgrade().unwrap(),
@@ -110,7 +114,7 @@ impl<T, F> Pool<T, F> where F: Fn() -> T {
     }
 }
 
-impl<T, F> Debug for Pool<T, F> where F: Fn() -> T {
+impl<T> Debug for Pool<T> {
     fn fmt(&self, fmt: &mut Formatter) -> fmt::Result {
         fmt.debug_struct("Pool")
             .field("items", &*self.items.lock().unwrap())
@@ -134,12 +138,12 @@ impl<T> Debug for Items<T> {
     }
 }
 
-pub struct Item<T, F> where F: Fn() -> T {
+pub struct Item<T> {
     item: Option<T>,
-    pool: Arc<Pool<T, F>>,
+    pool: Arc<Pool<T>>,
 }
 
-impl<T, F> Debug for Item<T, F> where T: Debug, F: Fn() -> T {
+impl<T> Debug for Item<T> where T: Debug {
     fn fmt(&self, fmt: &mut Formatter) -> fmt::Result {
         fmt.debug_struct("Item")
             .field("item", &self.item)
@@ -147,7 +151,7 @@ impl<T, F> Debug for Item<T, F> where T: Debug, F: Fn() -> T {
     }
 }
 
-impl<T, F> Deref for Item<T, F> where F: Fn() -> T {
+impl<T> Deref for Item<T> {
     type Target = T;
 
     fn deref(&self) -> &T {
@@ -155,13 +159,13 @@ impl<T, F> Deref for Item<T, F> where F: Fn() -> T {
     }
 }
 
-impl<T, F> DerefMut for Item<T, F> where F: Fn() -> T {
+impl<T> DerefMut for Item<T> {
     fn deref_mut(&mut self) -> &mut T {
         self.item.as_mut().unwrap()
     }
 }
 
-impl<T, F> Drop for Item<T, F> where F: Fn() -> T {
+impl<T> Drop for Item<T> {
     fn drop(&mut self) {
         self.pool.put(self.item.take().unwrap());
     }
@@ -197,13 +201,6 @@ mod tests {
         fn as_millis(&self) -> u64 {
             self.as_secs() * 1000 + self.subsec_nanos() as u64 / 1000000
         }
-    }
-
-    #[test]
-    fn pool_builder() {
-        let pool = Pool::with_capacity(1, || 0);
-        let _x = pool.get();
-        assert_eq!(pool.get_timeout(Duration::from_secs(0)).err(), Some(TimeoutError));
     }
 
     #[test]
